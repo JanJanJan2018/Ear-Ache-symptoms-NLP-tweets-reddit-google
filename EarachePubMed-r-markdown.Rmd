@@ -1,0 +1,202 @@
+---
+title: "EarAche PubMed"
+author: "Janis Corona"
+date: "12/9/2019"
+output: html_document
+---
+
+## This script takes ten articles from the abstracts on earache articles from NCBI's PubMed
+
+
+This creates a directory to stem the abstracts and preprocess from the csv file
+into a corpus of 10 files in a folder called Earache.
+```{r}
+Auto <- read.csv('NCBI-EarAche-PubMed.csv', sep=',',
+                 header=FALSE, na.strings=c('',' '))
+colnames(Auto) <- c('abstract','source')
+
+auto <- Auto[complete.cases(Auto$abstract),]
+
+
+dir.create('./Earache')
+
+ea <- as.character(auto$abstract)
+setwd('./Earache')
+
+for (j in 1:length(ea)){
+  write(ea[j], paste(paste('EA',j, sep='.'), '.txt', sep=''))
+}
+setwd('../')
+
+
+```
+
+This code preprocesses and stems the corpus
+```{r, error=FALSE, warning=FALSE, message=FALSE}
+library(tm)
+library(SnowballC)
+library(wordcloud)
+library(ggplot2)
+
+Earache <- Corpus(DirSource("Earache"))
+
+
+Earache
+
+Earache <- tm_map(Earache, removePunctuation)
+Earache <- tm_map(Earache, removeNumbers)
+Earache <- tm_map(Earache, tolower)
+Earache <- tm_map(Earache, removeWords, stopwords("english"))
+Earache <- tm_map(Earache, stripWhitespace)
+Earache <- tm_map(Earache, stemDocument)
+
+dtmEarache <- DocumentTermMatrix(Earache)
+
+freq <- colSums(as.matrix(dtmEarache))
+
+```
+
+This code orders words stemmed by frequency and finds input correlations
+```{r}
+FREQ <- data.frame(freq)
+ord <- order(freq, decreasing=TRUE)
+
+freq[head(ord, 25)]
+
+findAssocs(dtmEarache, "patient", corlimit=0.5)
+
+```
+
+
+```{r}
+findAssocs(dtmEarache, "ear", corlimit=0.5)
+
+```
+
+
+```{r}
+findAssocs(dtmEarache, "pain", corlimit=0.5)
+```
+
+
+```{r}
+wf <- data.frame(word=names(freq), freq=freq)
+p <- ggplot(subset(wf, freq>4), aes(word, freq))
+p <- p + geom_bar(stat= 'identity') 
+p <- p + theme(axis.text.x=element_text(angle=90, hjust=1)) 
+p
+
+```
+
+
+```{r}
+wordcloud(names(freq), freq, min.freq=4,colors=brewer.pal(3,'Dark2'))
+
+```
+
+
+```{r}
+wordcloud(names(freq), freq, max.words=40,colors=brewer.pal(6,'Dark2'))
+
+```
+
+### The above stemmed the corpus, this will lemmatize the original csv file
+and add the field to the table and write out to csv, followed by plot the 
+word count frequencies that were lemmatized and the word clouds
+
+```{r, error=FALSE, message=FALSE, warning=FALSE}
+library(textstem)
+
+lemma <- lemmatize_strings(auto$abstract, dictionary=lexicon::hash_lemmas)
+
+Lemma <- as.data.frame(lemma)
+Lemma <- cbind(Lemma, auto)
+
+colnames(Lemma) <- c('lemmatizedAbstract','abstract', 'source')
+
+write.csv(Lemma, 'LemmatizedEarAche.csv', row.names=FALSE)
+
+```
+
+```{r}
+dir.create('./EarAche-Lemma')
+
+ea <- as.character(Lemma$lemmatizedAbstract)
+setwd('./EarAche-Lemma')
+
+for (j in 1:length(ea)){
+  write(ea[j], paste(paste('EAL',j, sep='.'), '.txt', sep=''))
+}
+setwd('../')
+
+```
+
+```{r, error=FALSE, message=FALSE, warning=FALSE}
+library(tm)
+library(SnowballC)
+library(wordcloud)
+library(ggplot2)
+
+```
+
+
+
+```{r}
+Earache <- Corpus(DirSource("EarAche-Lemma"))
+
+Earache
+
+Earache <- tm_map(Earache, removePunctuation)
+Earache <- tm_map(Earache, removeNumbers)
+Earache <- tm_map(Earache, tolower)
+Earache <- tm_map(Earache, removeWords, stopwords("english"))
+Earache <- tm_map(Earache, stripWhitespace)
+
+dtmEarache <- DocumentTermMatrix(Earache)
+dtmEarache
+
+```
+
+```{r}
+freq <- colSums(as.matrix(dtmEarache))
+
+FREQ <- data.frame(freq)
+ord <- order(freq, decreasing=TRUE)
+
+freq[head(ord, 25)]
+
+```
+
+
+```{r}
+patient <- as.data.frame(findAssocs(dtmEarache, "patient", corlimit=0.6))
+
+earache <- as.data.frame(findAssocs(dtmEarache, "earache", corlimit=0.55))
+
+
+treatment <- as.data.frame(findAssocs(dtmEarache, "treatment", corlimit=0.55))
+
+patient
+earache
+treatment
+```
+
+```{r, width=500, height=500}
+wf <- data.frame(word=names(freq), freq=freq)
+p <- ggplot(subset(wf, freq>4), aes(word, freq))
+p <- p + geom_bar(stat= 'identity') 
+p <- p + theme(axis.text.x=element_text(angle=90, hjust=1)) 
+p
+
+```
+
+```{r}
+wordcloud(names(freq), freq, min.freq=5,colors=brewer.pal(3,'Dark2'))
+
+```
+
+```{r}
+wordcloud(names(freq), freq, max.words=40,colors=brewer.pal(6,'Dark2'))
+
+```
+
